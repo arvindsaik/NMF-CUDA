@@ -1,8 +1,9 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include<fstream>
-#include<assert.h>
-#include<iostream>
+#include "als.h"
+#include <fstream>
+#include <assert.h>
+#include <cuda_fp16.h>
+#include <iostream>
+using namespace std;
 
 #define SCAN_BATCH 28
 #define T10 10
@@ -25,8 +26,8 @@ using namespace std;
 
 void saveDeviceFloatArrayToFile(string fileName, int size, float* d_array){
 	float* h_array;
-	cudacheck(cudaMallocHost( (void** ) &h_array, size * sizeof(h_array[0])) );
-	cudacheck(cudaMemcpy(h_array, d_array, size * sizeof(h_array[0]),cudaMemcpyDeviceToHost));
+	cudacall(cudaMallocHost( (void** ) &h_array, size * sizeof(h_array[0])) );
+	cudacall(cudaMemcpy(h_array, d_array, size * sizeof(h_array[0]),cudaMemcpyDeviceToHost));
 	FILE * outfile = fopen(fileName.c_str(), "wb");
 	fwrite(h_array, sizeof(float), size, outfile);
 	fclose(outfile);
@@ -88,7 +89,7 @@ void getHermitian10(const int batch_offset, float *tt,
                     const int *csrRowIndex, const int *csrColIndex, const float lambda,
                   const int m, const int F, const float * __restrict__ thetaT)
 {
-  extern shared float2 thetaTemp[];
+  extern __shared__ float2 thetaTemp[];
   // Each row of Rating has a thread block and the offset is the Number of rows aldready computed
   int row = blockIdx.x + batch_offset;
   if(row < m)
@@ -142,8 +143,8 @@ void getHermitian10(const int batch_offset, float *tt,
           {
             float2 theta;
             //Stored in column majour order
-						theta.x = __ldg(&thetaT[F * csrColIndex[start + iter*SCAN_BATCH + k] + 2*threadIdx.x]);
-						theta.y = __ldg(&thetaT[F * csrColIndex[start + iter*SCAN_BATCH + k] + 2*threadIdx.x+1]);
+						theta.x = thetaT[F * csrColIndex[start + iter*SCAN_BATCH + k] + 2*threadIdx.x];
+						theta.y = thetaT[F * csrColIndex[start + iter*SCAN_BATCH + k] + 2*threadIdx.x+1];
 						thetaTemp[k * F/2 + threadIdx.x] = theta;
           }
           //not enough theta to copy, set zero
@@ -199,7 +200,7 @@ float ALS(const int *csrRowIndexHostPtr, const int *csrColIndexHostPtr, const fl
 		int *csrRowIndex = 0;
 		int *csrColIndex = 0;
 		float *csrVal = 0;
-		float *theatT = 0;
+		float *thetaT = 0;
 		float *XT = 0;
 		float *tt = 0;
 		float *cscVal = 0;
@@ -215,25 +216,25 @@ float ALS(const int *csrRowIndexHostPtr, const int *csrColIndexHostPtr, const fl
 
 		//Allocating memeory to the device pointers
 
-		cudacheck(cudaMalloc((void **)&cscRowIndex, nnz * sizeof(cscRowIndex[0])));
-		cudacheck(cudaMalloc((void **)&cscColIndex, (n+1) * sizeof(cscColIndex[0])));
-		cudacheck(cudaMalloc((void **)&cscVal, nnz * sizeof(cscVal[0])));
+		cudacall(cudaMalloc((void **)&cscRowIndex, nnz * sizeof(cscRowIndex[0])));
+		cudacall(cudaMalloc((void **)&cscColIndex, (n+1) * sizeof(cscColIndex[0])));
+		cudacall(cudaMalloc((void **)&cscVal, nnz * sizeof(cscVal[0])));
 
 		//thetaT : f * N
-		cudacheck(cudaMalloc((void **)&thetaT, f * n * sizeof(thetaT[0])));
+		cudacall(cudaMalloc((void **)&thetaT, f * n * sizeof(thetaT[0])));
 
 		//X : M * f
-		cudacheck(cudaMalloc((void **)&XT, m * f * sizeof(XT[0])));
+		cudacall(cudaMalloc((void **)&XT, m * f * sizeof(XT[0])));
 
 		//Copying data from host to device
 
-		cudacheck(cudaMemcpy(cscRowIndex, cscRowIndexHostPtr, (size_t) nnz*sizeof(cscRowIndex[0]), cudaMemcpyHostToDevice);
-		cudacheck(cudaMemcpy(cscColIndex, cscColIndexHostPtr, (size_t) (n+1)*sizeof(cscColIndex[0]), cudaMemcpyHostToDevice);
-		cudacheck(cudaMemcpy(cscVal, cscvalHostPtr, (size_t) nnz*sizeof(cscVal[0]), cudaMemcpyHostToDevice);
-		cudacheck(cudaMemcpy(thetaT, thetaTHost, (size_t) f*n*sizeof(thetaT[0]), cudaMemcpyHostToDevice);
-		cudacheck(cudaMemcpy(XT, XTHost, (size_t) f*m*sizeof(XT[0]), cudaMemcpyHostToDevice);
+		cudacall(cudaMemcpy(cscRowIndex, cscRowIndexHostPtr, (size_t) nnz*sizeof(cscRowIndex[0]), cudaMemcpyHostToDevice));
+		cudacall(cudaMemcpy(cscColIndex, cscColIndexHostPtr, (size_t) (n+1)*sizeof(cscColIndex[0]), cudaMemcpyHostToDevice));
+		cudacall(cudaMemcpy(cscVal, cscvalHostPtr, (size_t) nnz*sizeof(cscVal[0]), cudaMemcpyHostToDevice));
+		cudacall(cudaMemcpy(thetaT, thetaTHost, (size_t) f*n*sizeof(thetaT[0]), cudaMemcpyHostToDevice));
+		cudacall(cudaMemcpy(XT, XTHost, (size_t) f*m*sizeof(XT[0]), cudaMemcpyHostToDevice));
 
-		cudacheck(cudaDeviceSetCacheConfig(cudaFuncCachePreferShared));
+		cudacall(cudaDeviceSetCacheConfig(cudaFuncCachePreferShared));
 
 		//To minimize bank conflics the size of the bank has been set to eight bytes
 		cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte);
@@ -249,17 +250,17 @@ float ALS(const int *csrRowIndexHostPtr, const int *csrColIndexHostPtr, const fl
 
 		for(int i=0;i<ITERS;i++)
 		{
-			cudacheck(cudaMalloc((void** ) &csrRowIndex,(m + 1) * sizeof(csrRowIndex[0])));
-			cudacheck(cudaMalloc((void** ) &csrColIndex, nnz * sizeof(csrColIndex[0])));
-			cudacheck(cudaMalloc((void** ) &csrVal, nnz * sizeof(csrVal[0])));
-			cudacheck(cudaMemcpy(csrRowIndex, csrRowIndexHostPtr,(size_t ) ((m + 1) * sizeof(csrRowIndex[0])), cudaMemcpyHostToDevice));
-			cudacheck(cudaMemcpy(csrColIndex, csrColIndexHostPtr,(size_t ) (nnz * sizeof(csrColIndex[0])), cudaMemcpyHostToDevice));
-			cudacheck(cudaMemcpy(csrVal, csrValHostPtr,(size_t ) (nnz * sizeof(csrVal[0])),cudaMemcpyHostToDevice));
+			cudacall(cudaMalloc((void** ) &csrRowIndex,(m + 1) * sizeof(csrRowIndex[0])));
+			cudacall(cudaMalloc((void** ) &csrColIndex, nnz * sizeof(csrColIndex[0])));
+			cudacall(cudaMalloc((void** ) &csrVal, nnz * sizeof(csrVal[0])));
+			cudacall(cudaMemcpy(csrRowIndex, csrRowIndexHostPtr,(size_t ) ((m + 1) * sizeof(csrRowIndex[0])), cudaMemcpyHostToDevice));
+			cudacall(cudaMemcpy(csrColIndex, csrColIndexHostPtr,(size_t ) (nnz * sizeof(csrColIndex[0])), cudaMemcpyHostToDevice));
+			cudacall(cudaMemcpy(csrVal, csrvalHostPtr,(size_t ) (nnz * sizeof(csrVal[0])),cudaMemcpyHostToDevice));
 
       float * ytheta = 0;
   		float * ythetaT = 0;
-  		cudacheck(cudaMalloc((void** ) &ytheta, f * m * sizeof(ytheta[0])));
-  		cudacheck(cudaMalloc((void** ) &ythetaT, f * m * sizeof(ythetaT[0])));
+  		cudacall(cudaMalloc((void** ) &ytheta, f * m * sizeof(ytheta[0])));
+  		cudacall(cudaMalloc((void** ) &ythetaT, f * m * sizeof(ythetaT[0])));
 
       const float alpha = 1.0f;
 		  const float beta = 0.0f;
@@ -271,10 +272,10 @@ float ALS(const int *csrRowIndexHostPtr, const int *csrColIndexHostPtr, const fl
 
       //Summing up X*ThetaR over all iterations and storing in ythetaT
       cublascall(cublasSgeam(handle, CUBLAS_OP_T, CUBLAS_OP_N, f, m, &alpha,
-				(const float * ) ytheta, m, &beta, ythetaT, f, ythetaT, f))
+				(const float * ) ytheta, m, &beta, ythetaT, f, ythetaT, f));
 
-      cudacheck(cudaFree(ytheta));
-  		cudacheck(cudaFree(csrVal));
+      cudacall(cudaFree(ytheta));
+  		cudacall(cudaFree(csrVal));
 
       int block_dim = f/T10*(f/T10+1)/2;
       //minimum number of threads is f/2 to load each column of ThetaT
@@ -286,20 +287,20 @@ float ALS(const int *csrRowIndexHostPtr, const int *csrColIndexHostPtr, const fl
         if(batch_id!=X_Batch-1)
           batch_size = m/X_Batch;
         else
-          batch_size = m - batch_id*(m/X_Batch)
+          batch_size = m - batch_id*(m/X_Batch);
 
-        int batch_offset = batch_id*(m/X_Batch)
+        int batch_offset = batch_id*(m/X_Batch);
 
-        cudacheck(cudaMalloc((void** ) &tt, f * f * batch_size * sizeof(float)))
+        cudacall(cudaMalloc((void** ) &tt, f * f * batch_size * sizeof(float)));
 
         //updateXByBlock kernel.
 
-        getHermitian10<<<batch_size, block_dim, SCAN_BATCH * (f/2) * sizeof(float2)>>>();
+        getHermitian10<<<batch_size, block_dim, SCAN_BATCH * (f/2) * sizeof(float2)>>>(batch_offset, tt, csrRowIndex, csrColIndex, lambda, m, f, thetaT);
 
         cudaDeviceSynchronize();
 			  cudaCheckError();
-        printf("\tupdate X kernel run %f seconds, gridSize: %d, blockSize %d.\n", seconds() - t1, batch_size, f);
-			  t1 = seconds();
+        // printf("\tupdate X kernel run %f seconds, gridSize: %d, blockSize %d.\n", seconds() - t1, batch_size, f);
+			  // t1 = seconds();
 
         float ** devPtrTTHost = 0;
   			cudacall(cudaMallocHost( (void** ) &devPtrTTHost, batch_size * sizeof(*devPtrTTHost) ) );
@@ -311,16 +312,20 @@ float ALS(const int *csrRowIndexHostPtr, const int *csrColIndexHostPtr, const fl
 
 
   			printf("\tinvoke updateX with batch_size: %d, batch_offset: %d..\n", batch_size, batch_offset);
-  			printf("\tupdateX solver run seconds: %f \n", seconds() - t1);
+  			// printf("\tupdateX solver run seconds: %f \n", seconds() - t1);
 
   			cudacall(cudaFree(tt));
         }
 
-    		printf("update X run %f seconds, gridSize: %d, blockSize %d.\n", seconds() - t0, m, f);
+    		// printf("update X run %f seconds, gridSize: %d, blockSize %d.\n", seconds() - t0, m, f);
 
     		cudacall(cudaFree(csrRowIndex));
     		cudacall(cudaFree(csrColIndex));
     		cudacall(cudaFree(ythetaT));
 		}
+}
 
+int main()
+{
+  return 0;
 }

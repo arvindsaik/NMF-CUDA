@@ -1,7 +1,4 @@
 
-#ifndef ALS_H_
-#define ALS_H_
-
 #if GOOGLE_CUDA
 #define EIGEN_USE_GPU
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
@@ -395,4 +392,4 @@ while(0)\
 		exit(EXIT_FAILURE);\
 	    }\
     }\
-    while (0)\
+    while (0)
