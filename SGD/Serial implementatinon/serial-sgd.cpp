@@ -12,14 +12,9 @@ int main(){
 
   mat A = randu<mat>(m,n);
   A = A*99; //random
-  // for(int i=0;i<m;++i){
-  //   for(int j=0;j<n;++j){
-  //     float x;
-  //     cin>>x;
-  //     A(i,j) = x;
-  //   }
-  // }
-  // (A).print("Input A : ");
+
+  // A.print("A : ");
+
   int epochs;
   cout<<"Enter epochs for training : \n";
   cin>>epochs;
@@ -29,26 +24,23 @@ int main(){
   double alpha;
   cout<<"Enter alpha for training : \n";
   cin>>alpha;
+  double lamda;
+  cout<<"Enter lamda (regularisation variable) for training : \n";
+  cin>>lamda;
   mat B = randu<mat>(m,k); //random values from 0 to 1
   mat C = randu<mat>(k,n);
 
-  // B.print("B is : ");
-  // C.print("C is : ");
 
   for(int i=0;i<epochs;++i){
     for(int u=0;u<m;++u){
       for(int v=0;v<n;++v){
         mat errorMat  = (A(u,v) - B.row(u)*C.col(v));
         double error = errorMat(0,0);
-        B.row(u) = B.row(u) + alpha*(error*(C.col(v).t()));
-        C.col(v) = C.col(v) + alpha*(error*(B.row(u).t()));
+        B.row(u) = B.row(u) + alpha*(error*(C.col(v).t()) - lamda*(B.row(u)));
+        C.col(v) = C.col(v) + alpha*(error*(B.row(u).t()) - lamda*(C.col(v)));
       }
     }
   }
-  // A.print("A : ");
-  // B.print("B is : ");
-  // C.print("C is : ");
-  // (B*C).print("B*C : ");
   double sumError = 0;
   for(int u=0;u<m;++u){
     for(int v=0;v<n;++v){
@@ -57,5 +49,9 @@ int main(){
     }
   }
   sumError = sqrt(sumError);
-  cout << "RMS error : " << sumError << endl;
+
+  // B.print("B : ");
+  // C.print("C : ");
+  // (B*C).print("Product : ");
+  cout << "RMS error : " << sqrt(sumError) << endl;
 }
