@@ -22,52 +22,33 @@ void sgd_CPU(float *A,float *B,float *C,int epochs,float lamda,float alpha,int m
 }
 
 __global__ void sgd_kernel(float *A,float *B,float *C,int epochs,float lamda,float alpha,int m,int n,int k){
-	for(int eps=0;eps<epochs;++eps){ 
-		int y = blockIdx.x * blockDim.x + threadIdx.x;
-		int x = blockIdx.y * blockDim.y + threadIdx.y;
-		if(y<k && x<m){
-			float error = 0;
-			float gradient = 0;
-			for(int j=0;j<n;++j){
-				float temp = 0;
-				for(int iter=0;iter<k;++iter){
-					temp += B[x*k + iter]*C[iter*n + j];
-				}
-				error = A[x*n + j] - temp;
-				gradient += error*C[y*n + j];
-			}
-			__syncthreads();
-			B[x*k + y] += alpha*(gradient - lamda*(B[x*k + y]));
-		}
-		y = blockIdx.x * blockDim.x + threadIdx.x;
-		x = blockIdx.y * blockDim.y + threadIdx.y;
-		if(y<n && x<k){
-			float error = 0;
-			float gradient = 0;
-			for(int i=0;i<m;++i){
-				float temp = 0;
-				for(int iter=0;iter<k;++iter){
-					temp += B[i*k + iter]*C[iter*n + y];
-				}
-				error = A[i*n + y] - temp;
-				gradient += error*B[i*k + x];
-			}
-			__syncthreads();
-			C[x*n + y] += alpha*(gradient - lamda*(C[x*n + y]));
-		}
-		__syncthreads();
-	}
+  int y = blockIdx.x * blockDim.x + threadIdx.x;
+  int x = blockIdx.y * blockDim.y + threadIdx.y;
+  if(y<n && x<m){
+    for(int i=0;i<epochs;++i){
+      float error = 0;
+      float temp = 0;
+      for(int iter = 0;iter < k;++iter){
+        temp += B[x*k + iter]*C[iter*n + y];
+      }
+      // cout<<x<<" "<<y<<" "<<temp<<endl;
+      error = A[x*n+y] - temp;
+      for(int iter = 0;iter < k;++iter){
+        atomicAdd(&B[x*k + iter],alpha*((error * C[iter*n + y]) - lamda*(B[x*k + iter])));
+        atomicAdd(&C[iter*n + y],alpha*((error * B[x*k + iter]) - lamda*(C[iter*n + y])));
+        // B[x*k + iter] = B[x*k + iter] + alpha*((error * C[iter*n + y]) - lamda*(B[x*k + iter]));
+        // C[iter*n + y] = C[iter*n + y] + alpha*((error * B[x*k + iter]) - lamda*(C[iter*n + y]));
+      }
+    }
+  }
 }
 
 int main(){
   int m,n;
-  ifstream dataset("dataset.txt");
   float *Ahost,*Bhost,*Chost,*Bhost1,*Chost1;
   float *A,*B,*C;
-  //cout << "Enter dimensions of the matrix : ";
-  //cin>>m>>n;
-  m = 943;
-  n = 1682;
+  cout << "Enter dimensions of the matrix : ";
+  cin>>m>>n;
   cout << "Enter k value : ";
   int k;
   cin>>k;
@@ -91,28 +72,14 @@ int main(){
 
   srand(time(NULL));
 
-  memset(Ahost,0,sizeof(Ahost));
-
-  for(int i=0;i<100000;++i){
-	int temp;
-	dataset >> temp;
-	int x,y;
-	x = --temp;
-	dataset >> temp;
-	y = --temp;
-	dataset >> temp;
-	Ahost[x*n + y] = temp;
-  }
-/*
   //randomising the input array A
   for(int i=0;i<m;++i){
     for(int j=0;j<n;++j){
-      Ahost[i*n + j] = rand()%5 + 1.03;
+      Ahost[i*n + j] = rand()%100 + 1.03;
     }
   }
-*/
 
-  // randomising the output array B
+  //randomising the output array B
   for(int i=0;i<m;++i){
     for(int j=0;j<k;++j){
       Bhost[i*k + j] = rand()%2;
@@ -129,7 +96,7 @@ int main(){
   }
 
   // cout<<" A : "<<endl;
-  
+  //
   // for(int i=0;i<m;++i){
   //   for(int j=0;j<n;++j){
   //     cout<<Ahost[i*n+j]<<" ";
@@ -174,7 +141,7 @@ int main(){
   float milliseconds = 0;
   cudaEventElapsedTime(&milliseconds, start, stop);
 
-  cout<<"GPU kernel took "<<milliseconds/1000<<" seconds"<<endl;
+  cout<<"GPU kernel took "<<milliseconds<<" milliseconds"<<endl;
 
   float temp[m][n];
 
@@ -196,33 +163,13 @@ int main(){
     }
   }
 
-  cout<<"RMS error : "<<sqrt(sumError/(m*n))<<endl;
+  cout<<"RMS error : "<<sqrt(sumError)<<endl;
 
   double s = clock();
   sgd_CPU(Ahost,Bhost1,Chost1,epochs,lamda,alpha,m,n,k);
   double e = clock();
 
-  cout<<"CPU implementation took "<< (e-s)/CLOCKS_PER_SEC<<" seconds\n";
-
-  for(int i=0;i<m;++i){
-    for(int j=0;j<n;++j){
-      temp[i][j] = 0;
-      for(int l=0;l<k;++l){
-        temp[i][j]+= Bhost1[i*k+l]*Chost1[l*n+j];
-      }
-      // cout<<temp[i][j]<< " ";
-    }
-    // cout<<endl;
-  }
-  sumError = 0;
-  for(int i=0;i<m;++i){
-    for(int j=0;j<n;++j){
-      float errorMat  = Ahost[i*n+j] - temp[i][j];
-      sumError += errorMat*errorMat;
-    }
-  }
-
-  cout<<"RMS error : "<<sqrt(sumError/(m*n))<<endl;
+  cout<<"CPU implementation took "<< 1000*(e-s)/CLOCKS_PER_SEC<<" milliseconds\n";
 
   return 0;
 }
