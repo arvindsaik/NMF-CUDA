@@ -22,7 +22,7 @@ void sgd_CPU(float *A,float *B,float *C,int epochs,float lamda,float alpha,int m
 }
 
 __global__ void sgd_kernel(float *A,float *B,float *C,int epochs,float lamda,float alpha,int m,int n,int k){
-	for(int eps=0;eps<epochs;++eps){ 
+	for(int eps=0;eps<epochs;++eps){
 		int y = blockIdx.x * blockDim.x + threadIdx.x;
 		int x = blockIdx.y * blockDim.y + threadIdx.y;
 		if(y<k && x<m){
@@ -129,7 +129,7 @@ int main(){
   }
 
   // cout<<" A : "<<endl;
-  
+
   // for(int i=0;i<m;++i){
   //   for(int j=0;j<n;++j){
   //     cout<<Ahost[i*n+j]<<" ";

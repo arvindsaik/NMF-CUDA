@@ -41,7 +41,8 @@ __global__ void matrixMultiply(float * A, float * B, float * C,
        C[Row*numCColumns+Col] = Pvalue;
 }
 
-__global__ void transpose(float *odata, const float *idata, int rows, int cols)
+__global__ void
+transpose(float *odata, const float *idata, int rows, int cols)
 {
   __shared__ float tile[TILE_DIM][TILE_DIM+1];
 
@@ -69,6 +70,28 @@ __global__ void transpose(float *odata, const float *idata, int rows, int cols)
     if(y+j<rows && x<cols)
      odata[(y+j)*width + x] = tile[threadIdx.x][threadIdx.y + j];
   }
+}
+
+__global__
+void elewisemulti(float *A, float *B, float *C, int rows, int cols)
+{
+  int tx = threadIdx.x, ty = threadIdx.y,
+      bx = blockIdx.x, by = blockIdx.y,
+      row = by*blockDim.y+ty, col=blockDim.x*bx+tx;
+
+  if(row<rows && col<cols)
+    C[row][col] = A[row][col]*B[row][col];
+}
+
+__global__
+void elewisediv(float *A, float *B, float *C, int rows, int cols)
+{
+  int tx = threadIdx.x, ty = threadIdx.y,
+      bx = blockIdx.x, by = blockIdx.y,
+      row = by*blockDim.y+ty, col=blockDim.x*bx+tx;
+
+  if(row<rows && col<cols)
+    C[row][col] = A[row][col]/B[row][col];
 }
 
 int main()
@@ -139,25 +162,89 @@ int main()
 
   float *ACtranspose = new float[m*k];
   float *Ctranspose = new float[k*n];
+  float *BACtranspose = new float[m*k];
+  float *CCtranspose = new float[k*k];
+  float *BCCtranspose = new float[m*k];
   cudaMalloc((void **)&ACtranspose, sizeof(float) * m*k);
   cudaMalloc((void **)&Ctranspose, sizeof(float) * k*n);
+  cudaMalloc((void **)&CCtranspose, sizeof(float) * k*k);
+  cudaMalloc((void **)&BCCtranspose, sizeof(float) * m*k);
+  cudaMalloc((void **)&BACtranspose, sizeof(float) * m*k);
 
   dim3 gridSize1((k-1)/TILE_DIM + 1,(n-1)/TILE_DIM + 1,1);
-  dim3 blockSize1(TILE_DIM, BLOCK_ROWS, 1);
+  dim3 blockSize(TILE_DIM, BLOCK_ROWS, 1);
 
   dim3 gridSize2((m-1)/TILE_WIDTH + 1,(k-1)/TILE_WIDTH + 1,1);
-  dim3 blockSize2(TILE_WIDTH, TILE_WIDTH, 1);
+
+  dim3 gridSize3((k-1)/TILE_WIDTH + 1,(k-1)/TILE_WIDTH + 1,1);
+
+
+  float *BtransposeA = new float[k*n];
+  float *Btranspose = new float[k*m];
+  float *CBtransposeA = new float[k*n];
+  float *BtransposeB = new float[k*k];
+  float *BtransposeBC = new float[k*n];
+  cudaMalloc((void **)&BtransposeA, sizeof(float) * k*n);
+  cudaMalloc((void **)&Btranspose, sizeof(float) * k*m);
+  cudaMalloc((void **)&CBtransposeA, sizeof(float) * k*n);
+  cudaMalloc((void **)&BtransposeB, sizeof(float) * k*k);
+  cudaMalloc((void **)&BtransposeBC, sizeof(float) * k*n);
+
+  dim3 gridSize4((m-1)/TILE_DIM + 1,(k-1)/TILE_DIM + 1,1);
+
+  dim3 gridSize5((k-1)/TILE_WIDTH + 1,(n-1)/TILE_WIDTH + 1,1);
+
+  dim3 gridSize5((k-1)/TILE_WIDTH + 1,(k-1)/TILE_WIDTH + 1,1);
 
   for(int i=0;i<epochs;i++)
   {
 
-    transpose<<<gridSize, blockSize>>>(Ctranspose, C, k, n);
-    matrixMultiply<<<gridSize, blockSize>>>(A, Ctranspose, ACtranspose, m, n, n, k, m, k);
+    transpose<<<gridSize1, blockSize>>>(Ctranspose, C, k, n);
+    matrixMultiply<<<gridSize2, blockSize>>>(A, Ctranspose, ACtranspose, m, n, n, k, m, k);
+    elewisemulti<<<gridSize2, blockSize>>>(B, ACtranspose, BACtranspose, m, k);
+
+    matrixMultiply<<<gridSize3, blockSize>>>(C, Ctranspose, CCtranspose, k, n, n, k, k, k);
+    matrixMultiply<<<gridSize2, blockSize>>>(B, CCtranspose, BCCtranspose, m, k, k, k, m, k);
+    elewisediv<<<gridSize2, blockSize>>>(BACtranspose, BCCtranspose, B, m, k);
+
+    transpose<<<gridSize4, blockSize>>>(Btranspose, B, m, k);
+    matrixMultiply<<<gridSize5, blockSize>>>(Btranspose, A, BtransposeA, k, m, m, n, k, n);
+    elewisemulti<<<gridSize5, blockSize>>>(C, BtransposeA, CBtransposeA, k, n);
+
+    matrixMultiply<<<gridSize6, blockSize>>>(Btranspose, B, BtransposeB, k, m, m, k, k, k);
+    matrixMultiply<<<gridSize2, blockSize>>>(BtransposeB, C, BtransposeBC, k, k, k, n, k, n);
+    elewisediv<<<gridSize2, blockSize>>>(CBtransposeA, BtransposeBC, C, k, n);
+
   }
+
+  cudaMemcpy(Bhost, B, sizeof(float) * m*k, cudaMemcpyDeviceToHost);
+  cudaMemcpy(Chost, C, sizeof(float) * k*n, cudaMemcpyDeviceToHost);
+
+  float temp[m][n];
+
+  for(int i=0;i<m;++i){
+    for(int j=0;j<n;++j){
+      temp[i][j] = 0;
+      for(int l=0;l<k;++l){
+        temp[i][j]+= Bhost[i*k+l]*Chost[l*n+j];
+      }
+      // cout<<temp[i][j]<< " ";
+    }
+    // cout<<endl;
+  }
+  float sumError = 0;
+  for(int i=0;i<m;++i){
+    for(int j=0;j<n;++j){
+      float errorMat  = Ahost[i*n+j] - temp[i][j];
+      sumError += errorMat*errorMat;
+    }
+  }
+
+  cout<<"RMS error : "<<sqrt(sumError/(m*n))<<endl;
 
   cudaFree(A);
   cudaFree(B);
   cudaFree(C);
 
-
+  return 0;
 }
