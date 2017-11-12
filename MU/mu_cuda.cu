@@ -80,7 +80,7 @@ void elewisemulti(float *A, float *B, float *C, int rows, int cols)
       row = by*blockDim.y+ty, col=blockDim.x*bx+tx;
 
   if(row<rows && col<cols)
-    C[row][col] = A[row][col]*B[row][col];
+    C[row*cols + col] = A[row*cols + col]*B[row*cols + col];
 }
 
 __global__
@@ -91,7 +91,7 @@ void elewisediv(float *A, float *B, float *C, int rows, int cols)
       row = by*blockDim.y+ty, col=blockDim.x*bx+tx;
 
   if(row<rows && col<cols)
-    C[row][col] = A[row][col]/B[row][col];
+    C[row*cols + col] = A[row*cols + col]/B[row*cols + col];
 }
 
 int main()
@@ -194,7 +194,7 @@ int main()
 
   dim3 gridSize5((k-1)/TILE_WIDTH + 1,(n-1)/TILE_WIDTH + 1,1);
 
-  dim3 gridSize5((k-1)/TILE_WIDTH + 1,(k-1)/TILE_WIDTH + 1,1);
+  dim3 gridSize6((k-1)/TILE_WIDTH + 1,(k-1)/TILE_WIDTH + 1,1);
 
   for(int i=0;i<epochs;i++)
   {
