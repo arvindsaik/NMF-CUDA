@@ -1,3 +1,5 @@
+#ifndef ALS_H_
+#define ALS_H_
 
 #if GOOGLE_CUDA
 #define EIGEN_USE_GPU
@@ -393,3 +395,13 @@ while(0)\
 	    }\
     }\
     while (0)
+
+float ALS(const int* csrRowIndexHostPtr, const int* csrColIndexHostPtr, const float* csrValHostPtr,
+		const int* cscRowIndexHostPtr, const int* cscColIndexHostPtr, const float* cscValHostPtr,
+		const int* cooRowIndexHostPtr, float* thetaTHost, float * XTHost,
+		const int * cooRowIndexTestHostPtr, const int * cooColIndexTestHostPtr, const float * cooValHostTestPtr,
+		const int m, const int n, const int f, const long nnz, const long nnz_test, const float lambda,
+		const int ITERS, const int X_BATCH, const int THETA_BATCH);
+
+#endif /* ALS_H_ */
+
