@@ -1,0 +1,212 @@
+<html>
+
+<head>
+    <title>
+        Non negative matrix factorisation
+    </title>
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.12.4/css/bootstrap-select.min.css">
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.12.4/js/bootstrap-select.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.12.4/js/i18n/defaults-*.min.js"></script>
+
+</head>
+
+<body>
+    <div class="container">
+        <div class="row" style="text-align:center;">
+            <h1>Graph for Runtime of Various algorithms for NMF</h1>
+        </div>
+        <hr>
+        <h4 style="text-align:center;">
+          Click on a legend to toggle visibility of the associated graph
+        </h4>
+        <br />
+        <div class="row">
+            <div class="col-sm-1">
+            </div>
+            <div class="col-sm-10">
+                <div style="width:1000px;height:600px;text-align:center;margin: 0 auto;">
+                    <p style="text-align:center;">
+                        <canvas id="myChart"></canvas>
+                    </p>
+                </div>
+            </div>
+            <div class="col-sm-1"></div>
+        </div>
+        <div class="row" style="text-align:center;">
+            <h1>Graph for RMS Errors in various algorithms for NMF</h1>
+        </div>
+        <hr>
+        <h4 style="text-align:center;">
+          Click on a legend to toggle visibility of the associated graph
+        </h4>
+        <br />
+        <div class="row">
+            <div class="col-sm-1">
+            </div>
+            <div class="col-sm-10">
+                <div style="width:1000px;height:600px;text-align:center;margin: 0 auto;">
+                    <p style="text-align:center;">
+                        <canvas id="myChart2"></canvas>
+                    </p>
+                </div>
+            </div>
+            <div class="col-sm-1"></div>
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.4.0/Chart.min.js"></script>
+    <script>
+        function all() {
+            var ctx = document.getElementById('myChart').getContext('2d');
+            var chart = new Chart(ctx, {
+                // The type of chart we want to create
+                type: 'line',
+                // The data for our dataset
+                data: {
+                    labels: ["10 iterations", "100 iterations", "1000 iterations"],
+                    datasets: [{
+                        label: "SGD-GPU",
+                        borderColor: 'rgb(255, 99, 132)',
+                        data: [0.02,0.21,2.17],
+                        fill: false,
+                    }, 
+                    {
+                        label: "SGD-CPU",
+                        borderColor: 'rgb(44, 186, 37)',
+                        data: [1.92,19.55,195.64],
+                        fill: false,
+                    }, 
+                    {
+                        label: "MU-GPU",
+                        borderColor: 'rgb(204, 55, 199)',
+                        data: [0.004,0.041,0.44],
+                        fill: false,
+                    },
+                    {
+                        label: "MU-CPU",
+                        borderColor: 'rgb(100, 200, 20)',
+                        data: [0.28,1.5,14],
+                        fill: false,
+                    },
+                    {
+                        label: "ALS-GPU",
+                        borderColor: 'rgb(255, 148, 0)',
+                        data: [0.3,0.63,3.89],
+                        fill: false,
+                    },
+                    {
+                        label: "ALS-CPU",
+                        borderColor: 'rgb(56, 62, 237)',
+                        data: [0.290,1.25,14.68],
+                        fill: false,
+                    },
+                  ]
+                },
+                // Configuration options go here
+                options: {
+                    legend:{
+                      position : 'left',
+                    },
+                    scales: {
+                        xAxes: [{
+                            display: true,
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'Iterations'
+                            }
+                        }],
+                        yAxes: [{
+                            display: true,
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'Runtime(seconds)'
+                            }
+                        }]
+                    }
+                }
+            });
+        }
+        function all2() {
+            var ctx = document.getElementById('myChart2').getContext('2d');
+            var chart = new Chart(ctx, {
+                // The type of chart we want to create
+                type: 'line',
+                // The data for our dataset
+                data: {
+                    labels: ["10 iterations", "100 iterations", "1000 iterations"],
+                    datasets: [{
+                        label: "SGD-GPU",
+                        borderColor: 'rgb(255, 99, 132)',
+                        data: [0.96,0.77,0.68],
+                        fill: false,
+                    }, 
+                    {
+                        label: "SGD-CPU",
+                        borderColor: 'rgb(44, 186, 37)',
+                        data: [0.97,0.77,0.68],
+                        fill: false,
+                    }, 
+                    {
+                        label: "MU-GPU",
+                        borderColor: 'rgb(204, 55, 199)',
+                        data: [0.751,0.692,0.691],
+                        fill: false,
+                    },
+                    {
+                        label: "MU-CPU",
+                        borderColor: 'rgb(100, 200, 20)',
+                        data: [0.753,0.693,0.691],
+                        fill: false,
+                    },
+                    {
+                        label: "ALS-GPU",
+                        borderColor: 'rgb(255, 148, 0)',
+                        data: [0.30,0.30,0.30],
+                        fill: false,
+                    },
+                    {
+                        label: "ALS-CPU",
+                        borderColor: 'rgb(56, 62, 237)',
+                        data: [0.7,0.7,0.69],
+                        fill: false,
+                    },
+                  ]
+                },
+                // Configuration options go here
+                options: {
+                    legend:{
+                      position : 'left',
+                    },
+                    scales: {
+                        xAxes: [{
+                            display: true,
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'Iterations'
+                            }
+                        }],
+                        yAxes: [{
+                            display: true,
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'Runtime(seconds)'
+                            }
+                        }]
+                    }
+                }
+            });
+        }
+        $(document).ready(function() {
+            all();
+            all2();
+        });
+    </script>
+</body>
+
+</html>
