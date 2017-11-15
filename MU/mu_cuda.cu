@@ -7,13 +7,13 @@ using namespace std;
 #define BLOCK_ROWS 16
 
 // Compute C = A * B
-__global__ void matrixMultiply(float * A, float * B, float * C,
+_global_ void matrixMultiply(float * A, float * B, float * C,
              int numARows, int numAColumns,
              int numBRows, int numBColumns,
              int numCRows, int numCColumns) {
 
-    __shared__ float ds_M[TILE_WIDTH][TILE_WIDTH];
-    __shared__ float ds_N[TILE_WIDTH][TILE_WIDTH];
+    _shared_ float ds_M[TILE_WIDTH][TILE_WIDTH];
+    _shared_ float ds_N[TILE_WIDTH][TILE_WIDTH];
 
     int bx = blockIdx.x, by = blockIdx.y,
        tx = threadIdx.x, ty = threadIdx.y,
@@ -41,42 +41,42 @@ __global__ void matrixMultiply(float * A, float * B, float * C,
        C[Row*numCColumns+Col] = Pvalue;
 }
 
-__global__ void
+_global_ void
 transpose(float *odata, float *idata, int rows, int cols)
 {
-  // __shared__ float tile[TILE_DIM][TILE_DIM];
+  _shared_ float tile[TILE_DIM][TILE_DIM];
 
   int x = blockIdx.x * TILE_DIM + threadIdx.x;
   int y = blockIdx.y * TILE_DIM + threadIdx.y;
-  // int width = gridDim.x * TILE_DIM;
-  int width = cols;
 
-  // for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
-  // {
-  //   if(y+j<rows && x<cols)
-  //     tile[threadIdx.y+j][threadIdx.x] = idata[(y+j)*width + x];
-  //   else
-  //     tile[threadIdx.y+j][threadIdx.x] = 0.0;
-  // }
-
-
+  // int width = cols;
+  //
+  // // for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+  // // {
+  //   if(y<rows && x<cols){
+  //     tile[threadIdx.y][threadIdx.x] = idata[(y)*width + x];
+  //
+  //      // printf("%f   ",  tile[threadIdx.y][threadIdx.x]);
+  //   }
+  //
   // __syncthreads();
-
+  //
+  //
   // x = blockIdx.y * TILE_DIM + threadIdx.x;  // transpose block offset
   // y = blockIdx.x * TILE_DIM + threadIdx.y;
-
-  // for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
-  // {
-  //   if(y+j<rows && x<cols)
-  //   { odata[(y+j)*width + x] = tile[threadIdx.x][threadIdx.y + j];
-  //     printf("%f\n", odata[(y+j)*width + x]);
+  //
+  // // for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+  // // {
+  //    if(y<cols && x<rows)
+  //   { odata[(y)*width + x] = tile[threadIdx.x][threadIdx.y];
+  //     // printf("%f\n", tile[threadIdx.x][threadIdx.y]);
   //   }
-  // }
+  // // }
   if(x<cols && y<rows)
   {  odata[x*rows + y] = idata[y*cols + x];
   }
 }
-__global__
+_global_
 void elewisemulti(float *A, float *B, float *C, int rows, int cols)
 {
   int tx = threadIdx.x, ty = threadIdx.y,
@@ -87,7 +87,7 @@ void elewisemulti(float *A, float *B, float *C, int rows, int cols)
     C[row*cols + col] = A[row*cols + col]*B[row*cols + col];
 }
 
-__global__
+_global_
 void elewisediv(float *A, float *B, float *C, int rows, int cols)
 {
   int tx = threadIdx.x, ty = threadIdx.y,
@@ -108,12 +108,14 @@ int main()
   //cin>>m>>n;
   m = 943;
   n = 1682;
-  cout << "Enter k value : ";
+  // cout << "Enter k value : ";
   int k;
-  cin>>k;
+  // cin>>k;
+  k=10;
   int epochs;
-  cout<<"Enter epochs for training : ";
-  cin>>epochs;
+  // cout<<"Enter epochs for training : ";
+  // cin>>epochs;
+  epochs = 10;
 
   Ahost = new float[m*n];
   Bhost = new float[m*k];
@@ -142,7 +144,7 @@ int main()
 
   for(int i=0;i<m;++i){
     for(int j=0;j<k;++j){
-      Bhost[i*k + j] = rand()%2+0.1;
+      Bhost[i*k + j] = ((float) rand() / (RAND_MAX));
       Bhost1[i*k + j] = Bhost[i*k + j];
     }
   }
@@ -150,7 +152,7 @@ int main()
   //randomising the output array C
   for(int i=0;i<k;++i){
     for(int j=0;j<n;++j){
-      Chost[i*n + j] = rand()%2+0.1;
+      Chost[i*n + j] = ((float) rand() / (RAND_MAX));
       Chost1[i*n + j] = Chost[i*n + j];
     }
   }
@@ -176,9 +178,9 @@ int main()
   cudaMalloc((void **)&BACtranspose, sizeof(float) * m*k);
 
   dim3 gridSize1((n-1)/16 + 1,(k-1)/16 + 1,1);
-  
+
   dim3 blockSize1(16, 16, 1);
-  
+
   dim3 blockSize2(TILE_WIDTH, TILE_WIDTH, 1);
 
 
@@ -204,51 +206,65 @@ int main()
 
   dim3 gridSize6((k-1)/TILE_WIDTH + 1,(k-1)/TILE_WIDTH + 1,1);
 
-  float *temp1 = new float[m*k];
+  float *temp1 = new float[n*k];
 
+  cudaEventRecord(start);
   for(int i=0;i<epochs;i++)
   {
 
     transpose<<<gridSize1, blockSize1>>>(Ctranspose, C, k, n);
-    cudaDeviceSynchronize();
 
-
+    cudaMemcpy(temp1, Ctranspose, sizeof(float) * n*k, cudaMemcpyDeviceToHost);
+    // for(int p=0;p<n*k;p++)
+    //   cout<<temp1[p]<<" ";
 
     matrixMultiply<<<gridSize2, blockSize2>>>(A, Ctranspose, ACtranspose, m, n, n, k, m, k);
-    cudaDeviceSynchronize();
 
-    
+
 
     elewisemulti<<<gridSize2, blockSize2>>>(B, ACtranspose, BACtranspose, m, k);
-    cudaDeviceSynchronize();
+
+
 
     matrixMultiply<<<gridSize3, blockSize2>>>(C, Ctranspose, CCtranspose, k, n, n, k, k, k);
-    cudaDeviceSynchronize();
+
+
 
     matrixMultiply<<<gridSize2, blockSize2>>>(B, CCtranspose, BCCtranspose, m, k, k, k, m, k);
-    cudaDeviceSynchronize();
+
+
+
     elewisediv<<<gridSize2, blockSize2>>>(BACtranspose, BCCtranspose, B, m, k);
-    cudaDeviceSynchronize();
 
-    
 
-    transpose<<<gridSize4, blockSize1>>>(Btranspose, B, m, k);
-    cudaDeviceSynchronize();
+
+     transpose<<<gridSize4, blockSize1>>>(Btranspose, B, m, k);
+
+
     matrixMultiply<<<gridSize5, blockSize2>>>(Btranspose, A, BtransposeA, k, m, m, n, k, n);
-    cudaDeviceSynchronize();
+
+
     elewisemulti<<<gridSize5, blockSize2>>>(C, BtransposeA, CBtransposeA, k, n);
-    cudaDeviceSynchronize();
 
     matrixMultiply<<<gridSize6, blockSize2>>>(Btranspose, B, BtransposeB, k, m, m, k, k, k);
-    cudaDeviceSynchronize();
-    matrixMultiply<<<gridSize2, blockSize2>>>(BtransposeB, C, BtransposeBC, k, k, k, n, k, n);
-    cudaDeviceSynchronize();
-    elewisediv<<<gridSize2, blockSize2>>>(CBtransposeA, BtransposeBC, C, k, n);
-    cudaDeviceSynchronize();
+
+    matrixMultiply<<<gridSize5, blockSize2>>>(BtransposeB, C, BtransposeBC, k, k, k, n, k, n);
+
+    elewisediv<<<gridSize5, blockSize2>>>(CBtransposeA, BtransposeBC, C, k, n);
+
   }
+
+    cudaEventRecord(stop);
 
   cudaMemcpy(Bhost, B, sizeof(float) * m*k, cudaMemcpyDeviceToHost);
   cudaMemcpy(Chost, C, sizeof(float) * k*n, cudaMemcpyDeviceToHost);
+  cudaEventSynchronize(stop);
+
+
+      float milliseconds = 0;
+      cudaEventElapsedTime(&milliseconds, start, stop);
+
+      cout<<"GPU kernel took "<<milliseconds/1000<<" seconds"<<endl;
 
   float temp[m][n];
 
