@@ -78,10 +78,6 @@ __global__ void sgd_kernel(float *B,float *C,float *Error,float lamda,float alph
 			float error = 0;
 			float gradient = 0;
 			for(int i=0;i<m;++i){
-				float temp = 0;
-				for(int iter=0;iter<k;++iter){
-					temp += B[i*k + iter]*C[iter*n + y];
-				}
 				error = Error[i*n + y];
 				gradient += error*B[i*k + x];
 			}
